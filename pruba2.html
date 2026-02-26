@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mega Kliker Sigma Edition - Z Kodami</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: radial-gradient(circle, #ffcc00, #ff8800);
+            color: white;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        .golden-text {
+            font-weight: bold;
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fcf6ba, #bf953f);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            background-size: 200% auto;
+            animation: shine 3s linear infinite;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+        }
+
+        @keyframes shine {
+            to { background-position: 200% center; }
+        }
+
+        #login-screen {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 30px;
+            border-radius: 25px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            width: 420px;
+        }
+
+        #game-screen { display: none; text-align: center; }
+
+        #score-container { margin-bottom: 15px; }
+        #score { font-size: 65px; font-weight: bold; text-shadow: 3px 3px 0 rgba(0,0,0,0.2); }
+        
+        .king-score {
+            color: #fff700 !important;
+            text-shadow: 0 0 20px gold, 3px 3px 0 rgba(0,0,0,0.3) !important;
+        }
+
+        @keyframes goldenPulse {
+            0% { filter: drop-shadow(0 0 15px gold); transform: scale(1); }
+            50% { filter: drop-shadow(0 0 40px #fff700); transform: scale(1.05); }
+            100% { filter: drop-shadow(0 0 15px gold); transform: scale(1); }
+        }
+
+        .leader-glow { animation: goldenPulse 2s infinite ease-in-out; }
+
+        #click-button {
+            font-size: 130px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        #click-button:active { transform: scale(0.9); }
+
+        .section {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 340px;
+            margin: 10px auto;
+        }
+
+        button.btn {
+            padding: 12px;
+            border-radius: 50px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            background: white;
+            color: #ff8800;
+            transition: 0.2s;
+        }
+        button.btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #progress-bg {
+            width: 100%; height: 12px; background: rgba(0,0,0,0.2);
+            margin-top: 5px; border-radius: 10px; display: none; overflow: hidden;
+        }
+        #progress-bar { width: 0%; height: 100%; background: #9c27b0; transition: width 0.1s linear; }
+
+        .account-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 15px;
+            color: #333;
+        }
+        .first-place { border: 3px solid gold; box-shadow: 0 0 15px gold; }
+
+        .floating-text {
+            position: absolute; font-weight: bold; pointer-events: none;
+            animation: float 0.8s forwards; font-size: 28px; color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        @keyframes float { 0% { opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
+
+        input.cheat-input {
+            background: rgba(255,255,255,0.9);
+            border: none;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="golden-text" style="font-size: 26px; margin-bottom: 15px;">👑 RANKING KRÓLÓW 👑</div>
+        <div id="accounts-list"></div>
+        <hr style="opacity:0.3; margin: 20px 0;">
+        <input type="text" id="new-account-name" maxlength="12" placeholder="Twoje imię..." style="padding:12px; border-radius:15px; border:none; width: 85%; text-align:center;">
+        <button class="btn" style="margin-top:15px; width: 100%;" onclick="createAccount()">DOŁĄCZ DO GRY</button>
+    </div>
+
+    <div id="game-screen">
+        <div id="bonus-tag" class="golden-text" style="font-size: 18px; margin-bottom: 10px; display:none;">✨ Bonus Króla: KLIK x2 ✨</div>
+        <div style="display:flex; justify-content: space-between; width: 400px; margin-bottom: 20px;">
+            <button onclick="logout()" style="background:rgba(0,0,0,0.4); border:none; color:white; padding:10px 20px; border-radius:12px; cursor:pointer; font-weight:bold;">⬅ Wyjdź</button>
+            <span style="font-weight:bold; background:rgba(255,255,255,0.25); padding:10px 20px; border-radius:12px;">👤 <span id="current-user-display"></span></span>
+        </div>
+        
+        <div id="score-container">
+            <div id="score">0</div>
+            <div id="bot-info" style="font-weight:bold;">Zbieraj punkty!</div>
+            <div id="progress-bg"><div id="progress-bar"></div></div>
+        </div>
+        
+        <button id="click-button">🍪</button>
+
+        <div class="section">
+            <button id="upgrade-btn" class="btn">💪 Ulepsz klik | Koszt: 10</button>
+            <button id="auto-btn" class="btn" style="color:#9c27b0">🤖 Kup Robota | Koszt: 1M</button>
+        </div>
+
+        <div class="section" style="background: rgba(0,0,0,0.3)">
+            <div style="font-size: 12px; margin-bottom: 5px; opacity: 0.8;">KODY PROMOCYJNE</div>
+            <input type="text" id="promo-input" class="cheat-input" placeholder="Wpisz kod...">
+            <button class="btn" style="background: #333; color: white;" onclick="usePromoCode()">AKTYWUJ</button>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let gameData = {};
+        let isLeader = false;
+
+        function getAccounts() { return JSON.parse(localStorage.getItem('sigma_accounts') || "{}"); }
+
+        function loadAccounts() {
+            const list = document.getElementById('accounts-list');
+            list.innerHTML = "";
+            const accounts = getAccounts();
+            let sorted = Object.keys(accounts).map(name => ({
+                name, score: accounts[name].score, power: accounts[name].clickValue
+            })).sort((a, b) => b.score - a.score);
+
+            sorted.forEach((acc, index) => {
+                let row = document.createElement('div');
+                row.className = "account-row" + (index === 0 ? " first-place" : "");
+                row.innerHTML = `<div class="account-info" style="cursor:pointer; width:100%" onclick="login('${acc.name}', ${index === 0})">
+                    <b>${index === 0 ? "👑" : index + 1 + "."} ${acc.name}</b> 
+                    <span class='score-badge'>💰 ${Math.floor(acc.score).toLocaleString()} | 💪 Klik: ${acc.power}</span>
+                </div>`;
+                list.appendChild(row);
+            });
+        }
+
+        function createAccount() {
+            const name = document.getElementById('new-account-name').value.trim();
+            if (!name) return;
+            let accounts = getAccounts();
+            if (accounts[name]) return alert("Ta nazwa jest już zajęta!");
+            accounts[name] = { score: 0, clickValue: 1, upgradeCost: 10, autoCost: 1000000, autoLevel: 0 };
+            localStorage.setItem('sigma_accounts', JSON.stringify(accounts));
+            loadAccounts();
+            login(name, (Object.keys(accounts).length === 1));
+        }
+
+        function login(name, leaderStatus) {
+            currentUser = name;
+            isLeader = leaderStatus;
+            gameData = getAccounts()[name];
+            document.getElementById('login-screen').style.display = "none";
+            document.getElementById('game-screen').style.display = "block";
+            document.getElementById('current-user-display').innerText = (isLeader ? "👑 " : "") + name;
+            
+            const scoreEl = document.getElementById('score');
+            const bonusTag = document.getElementById('bonus-tag');
+            const btn = document.getElementById('click-button');
+
+            if(isLeader) {
+                scoreEl.classList.add('king-score');
+                bonusTag.style.display = "inline-block";
+                btn.classList.add('leader-glow');
+            } else {
+                scoreEl.classList.remove('king-score');
+                bonusTag.style.display = "none";
+                btn.classList.remove('leader-glow');
+            }
+            update();
+        }
+
+        function logout() {
+            save(); currentUser = null;
+            document.getElementById('login-screen').style.display = "block";
+            document.getElementById('game-screen').style.display = "none";
+            loadAccounts();
+        }
+
+        function save() {
+            if (!currentUser) return;
+            let accounts = getAccounts();
+            accounts[currentUser] = gameData;
+            localStorage.setItem('sigma_accounts', JSON.stringify(accounts));
+        }
+
+        function update() {
+            document.getElementById('score').innerText = Math.floor(gameData.score).toLocaleString();
+            document.getElementById('upgrade-btn').innerText = "💪 Ulepsz klik | " + gameData.upgradeCost.toLocaleString();
+            document.getElementById('auto-btn').innerText = "🤖 Kup Robota | " + gameData.autoCost.toLocaleString();
+            document.getElementById('upgrade-btn').disabled = gameData.score < gameData.upgradeCost;
+            document.getElementById('auto-btn').disabled = gameData.score < gameData.autoCost;
+
+            if (gameData.autoLevel > 0) {
+                document.getElementById('progress-bg').style.display = "block";
+                document.getElementById('bot-info').innerText = "🤖 Roboty: " + gameData.autoLevel;
+            }
+            save();
+        }
+
+        // --- SYSTEM KODÓW ---
+        function usePromoCode() {
+            const code = document.getElementById('promo-input').value.trim().toUpperCase();
+            if (code === "SIGMA100K") {
+                gameData.score += 100000;
+                alert("KOD PRZYJĘTY! +100,000 punktów!");
+            } else if (code === "SKKIPER1M") {
+                gameData.score += 1000000;
+                alert("KOD PRZYJĘTY! +1,000,000 punktów!");
+            } else {
+                alert("Nieprawidłowy kod!");
+            }
+            document.getElementById('promo-input').value = "";
+            update();
+        }
+
+        document.getElementById('click-button').onclick = (e) => {
+            let finalPower = isLeader ? (gameData.clickValue * 2) : gameData.clickValue;
+            gameData.score += finalPower;
+            
+            let f = document.createElement('div');
+            f.className = 'floating-text';
+            f.innerText = "+" + finalPower;
+            f.style.left = e.pageX + "px"; f.style.top = e.pageY + "px";
+            f.style.color = isLeader ? "gold" : "white";
+            document.body.appendChild(f);
+            setTimeout(() => f.remove(), 800);
+            update();
+        };
+
+        document.getElementById('upgrade-btn').onclick = () => {
+            if (gameData.score >= gameData.upgradeCost) {
+                gameData.score -= gameData.upgradeCost;
+                gameData.clickValue++;
+                gameData.upgradeCost = Math.round(gameData.upgradeCost * 1.7);
+                update();
+            }
+        };
+
+        document.getElementById('auto-btn').onclick = () => {
+            if (gameData.score >= gameData.autoCost) {
+                gameData.score -= gameData.autoCost;
+                gameData.autoLevel++;
+                gameData.autoCost = Math.round(gameData.autoCost * 1.5);
+                update();
+            }
+        };
+
+        setInterval(() => {
+            if (currentUser && gameData.autoLevel > 0) {
+                gameData.score += (10000 * gameData.autoLevel) / 30;
+                update();
+            }
+        }, 100);
+
+        loadAccounts();
+    </script>
+</body>
+</html>
