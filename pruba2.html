@@ -201,7 +201,17 @@
             if (!name) return;
             let accounts = getAccounts();
             if (accounts[name]) return alert("Ta nazwa jest już zajęta!");
-            accounts[name] = { score: 0, clickValue: 1, upgradeCost: 10, autoCost: 1000000, autoLevel: 0 };
+            
+            // NOWOŚĆ: Dodajemy listę użytych kodów
+            accounts[name] = { 
+                score: 0, 
+                clickValue: 1, 
+                upgradeCost: 10, 
+                autoCost: 1000000, 
+                autoLevel: 0,
+                usedCodes: [] 
+            };
+            
             localStorage.setItem('sigma_accounts', JSON.stringify(accounts));
             loadAccounts();
             login(name, (Object.keys(accounts).length === 1));
@@ -211,6 +221,10 @@
             currentUser = name;
             isLeader = leaderStatus;
             gameData = getAccounts()[name];
+
+            // Zabezpieczenie dla starych kont: jeśli nie mają listy kodów, stwórz ją
+            if (!gameData.usedCodes) gameData.usedCodes = [];
+
             document.getElementById('login-screen').style.display = "none";
             document.getElementById('game-screen').style.display = "block";
             document.getElementById('current-user-display').innerText = (isLeader ? "👑 " : "") + name;
@@ -259,20 +273,40 @@
             save();
         }
 
-        // --- SYSTEM KODÓW ---
+        // --- ZMODYFIKOWANY SYSTEM KODÓW (TYLKO RAZ) ---
         function usePromoCode() {
-            const code = document.getElementById('promo-input').value.trim().toUpperCase();
+            const codeInput = document.getElementById('promo-input');
+            const code = codeInput.value.trim().toUpperCase();
+            
+            if (!code) return;
+
+            // Sprawdzenie czy kod został już użyty
+            if (gameData.usedCodes.includes(code)) {
+                alert("Już wykorzystałeś ten kod!");
+                codeInput.value = "";
+                return;
+            }
+
+            let success = false;
             if (code === "SIGMA100K") {
                 gameData.score += 100000;
                 alert("KOD PRZYJĘTY! +100,000 punktów!");
+                success = true;
             } else if (code === "SKKIPER1M") {
                 gameData.score += 1000000;
                 alert("KOD PRZYJĘTY! +1,000,000 punktów!");
+                success = true;
             } else {
                 alert("Nieprawidłowy kod!");
             }
-            document.getElementById('promo-input').value = "";
-            update();
+
+            // Jeśli kod zadziałał, zapisz go jako zużyty
+            if (success) {
+                gameData.usedCodes.push(code);
+                update();
+            }
+            
+            codeInput.value = "";
         }
 
         document.getElementById('click-button').onclick = (e) => {
