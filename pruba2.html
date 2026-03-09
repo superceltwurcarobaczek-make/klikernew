@@ -44,25 +44,23 @@
         #score-container { margin-bottom: 15px; }
         #score { font-size: 65px; font-weight: bold; text-shadow: 3px 3px 0 rgba(0,0,0,0.2); }
         .king-score { color: #fff700 !important; text-shadow: 0 0 20px gold, 3px 3px 0 rgba(0,0,0,0.3) !important; }
-        @keyframes goldenPulse {
-            0% { filter: drop-shadow(0 0 15px gold); transform: scale(1); }
-            50% { filter: drop-shadow(0 0 40px #fff700); transform: scale(1.05); }
-            100% { filter: drop-shadow(0 0 15px gold); transform: scale(1); }
-        }
-        .leader-glow { animation: goldenPulse 2s infinite ease-in-out; }
+        
         #click-button { font-size: 130px; background: none; border: none; cursor: pointer; transition: transform 0.1s; }
         #click-button:active { transform: scale(0.9); }
         .section { background: rgba(255, 255, 255, 0.2); padding: 15px; border-radius: 20px; display: flex; flex-direction: column; gap: 10px; width: 340px; margin: 10px auto; }
         button.btn { padding: 12px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; background: white; color: #ff8800; transition: 0.2s; }
         button.btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         button.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
         #progress-bg { width: 100%; height: 12px; background: rgba(0,0,0,0.2); margin-top: 5px; border-radius: 10px; display: none; overflow: hidden; }
         #progress-bar { width: 0%; height: 100%; background: #9c27b0; transition: width 0.1s linear; }
         .account-row { display: flex; justify-content: space-between; align-items: center; background: white; margin: 10px 0; padding: 10px 15px; border-radius: 15px; color: #333; }
         .first-place { border: 3px solid gold; box-shadow: 0 0 15px gold; }
         .floating-text { position: absolute; font-weight: bold; pointer-events: none; animation: float 0.8s forwards; font-size: 28px; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
         @keyframes float { 0% { opacity: 1; } 100% { transform: translateY(-120px); opacity: 0; } }
-        input.cheat-input { background: rgba(255,255,255,0.9); border: none; padding: 10px; border-radius: 10px; text-align: center; font-weight: bold; color: #333; }
+        input.cheat-input { background: rgba(255,255,255,0.9); border: none; padding: 10px; border-radius: 10px; text-align: center; font-weight: bold; color: #333; margin-bottom: 5px; }
+        
+        #timer-display { font-weight: bold; color: #fff700; margin-top: 5px; display: none; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 10px; }
     </style>
 </head>
 <body>
@@ -75,7 +73,7 @@
     </div>
 
     <div id="game-screen">
-        <div id="bonus-tag" class="golden-text" style="font-size: 18px; margin-bottom: 10px; display:none;">✨ JESTEŚ AKTUALNYM KRÓLEM ✨</div>
+        <div id="bonus-tag" class="golden-text" style="font-size: 18px; margin-bottom: 10px; display:none;">✨ JESTEŚ KRÓLEM ✨</div>
         <div style="display:flex; justify-content: space-between; width: 400px; margin-bottom: 20px;">
             <button onclick="logout()" style="background:rgba(0,0,0,0.4); border:none; color:white; padding:10px 20px; border-radius:12px; cursor:pointer; font-weight:bold;">⬅ Wyjdź</button>
             <span style="font-weight:bold; background:rgba(255,255,255,0.25); padding:10px 20px; border-radius:12px;">👤 <span id="current-user-display"></span></span>
@@ -84,6 +82,7 @@
         <div id="score-container">
             <div id="score">0</div>
             <div id="bot-info" style="font-weight:bold;">Zbieraj punkty!</div>
+            <div id="timer-display">BOOST x2: <span id="timer-seconds">0</span>s</div>
             <div id="progress-bg"><div id="progress-bar"></div></div>
         </div>
         
@@ -105,6 +104,7 @@
         let currentUser = null;
         let gameData = {};
         let isLeader = false;
+        let boostInterval = null;
 
         function getAccounts() { return JSON.parse(localStorage.getItem('sigma_accounts') || "{}"); }
 
@@ -139,7 +139,9 @@
                 upgradeCost: 10, 
                 autoCost: 1000000, 
                 autoLevel: 0,
-                usedCodes: [] 
+                usedCodes: [],
+                lastKingUse: 0,
+                boostUntil: 0 // Czas w ms, do którego trwa boost
             };
             
             localStorage.setItem('sigma_accounts', JSON.stringify(accounts));
@@ -153,29 +155,43 @@
             gameData = getAccounts()[name];
 
             if (!gameData.usedCodes) gameData.usedCodes = [];
+            if (!gameData.lastKingUse) gameData.lastKingUse = 0;
+            if (!gameData.boostUntil) gameData.boostUntil = 0;
 
             document.getElementById('login-screen').style.display = "none";
             document.getElementById('game-screen').style.display = "block";
             document.getElementById('current-user-display').innerText = (isLeader ? "👑 " : "") + name;
             
-            const scoreEl = document.getElementById('score');
-            const bonusTag = document.getElementById('bonus-tag');
-            const btn = document.getElementById('click-button');
-
-            if(isLeader) {
-                scoreEl.classList.add('king-score');
-                bonusTag.style.display = "inline-block";
-                btn.classList.add('leader-glow');
-            } else {
-                scoreEl.classList.remove('king-score');
-                bonusTag.style.display = "none";
-                btn.classList.remove('leader-glow');
-            }
+            document.getElementById('bonus-tag').style.display = isLeader ? "inline-block" : "none";
+            
+            checkBoostState();
             update();
         }
 
+        function checkBoostState() {
+            if (boostInterval) clearInterval(boostInterval);
+            
+            const now = Date.now();
+            if (gameData.boostUntil > now) {
+                document.getElementById('timer-display').style.display = "block";
+                boostInterval = setInterval(() => {
+                    const remaining = Math.ceil((gameData.boostUntil - Date.now()) / 1000);
+                    if (remaining <= 0) {
+                        clearInterval(boostInterval);
+                        document.getElementById('timer-display').style.display = "none";
+                    } else {
+                        document.getElementById('timer-seconds').innerText = remaining;
+                    }
+                }, 1000);
+            } else {
+                document.getElementById('timer-display').style.display = "none";
+            }
+        }
+
         function logout() {
-            save(); currentUser = null;
+            save(); 
+            if (boostInterval) clearInterval(boostInterval);
+            currentUser = null;
             document.getElementById('login-screen').style.display = "block";
             document.getElementById('game-screen').style.display = "none";
             loadAccounts();
@@ -207,42 +223,54 @@
             const code = codeInput.value.trim().toUpperCase();
             if (!code) return;
 
-            if (gameData.usedCodes.includes(code)) {
-                alert("Już wykorzystałeś ten kod!");
+            const now = Date.now();
+
+            if (code === "KRÓL") {
+                const dayInMs = 24 * 60 * 60 * 1000;
+                if (now - gameData.lastKingUse < dayInMs) {
+                    const remHours = Math.ceil((dayInMs - (now - gameData.lastKingUse)) / (1000 * 60 * 60));
+                    alert(`Kod KRÓL raz na dobę! Poczekaj jeszcze ${remHours}h.`);
+                } else {
+                    gameData.lastKingUse = now;
+                    gameData.boostUntil = now + (60 * 1000); // 60 sekund
+                    checkBoostState();
+                    update();
+                    alert("KOD KRÓL: Boost x2 na 60 sekund! Nawet jak wyjdziesz, czas leci.");
+                }
                 codeInput.value = "";
                 return;
             }
 
-            let success = false;
-            if (code === "SIGMA100K") {
-                gameData.score += 100000;
-                alert("KOD PRZYJĘTY! +100,000 punktów!");
-                success = true;
-            } else if (code === "SKKIPER1M") {
-                gameData.score += 1000000;
-                alert("KOD PRZYJĘTY! +1,000,000 punktów!");
-                success = true;
-            } else {
-                alert("Nieprawidłowy kod!");
+            if (gameData.usedCodes.includes(code)) {
+                alert("Kod już wykorzystany!");
+                codeInput.value = ""; return;
             }
 
+            let success = false;
+            if (code === "SIGMA100K") { gameData.score += 100000; success = true; }
+            else if (code === "SKKIPER1M") { gameData.score += 1000000; success = true; }
+            
             if (success) {
                 gameData.usedCodes.push(code);
+                alert("KOD PRZYJĘTY!");
                 update();
+            } else {
+                alert("Zły kod!");
             }
             codeInput.value = "";
         }
 
         document.getElementById('click-button').onclick = (e) => {
-            // USUNIĘTO: Mnożnik isLeader ? (gameData.clickValue * 2) : ...
-            let finalPower = gameData.clickValue; 
+            let finalPower = gameData.clickValue;
+            if (gameData.boostUntil > Date.now()) finalPower *= 2;
+            
             gameData.score += finalPower;
             
             let f = document.createElement('div');
             f.className = 'floating-text';
             f.innerText = "+" + finalPower;
             f.style.left = e.pageX + "px"; f.style.top = e.pageY + "px";
-            f.style.color = isLeader ? "gold" : "white";
+            f.style.color = (gameData.boostUntil > Date.now()) ? "#fff700" : "white";
             document.body.appendChild(f);
             setTimeout(() => f.remove(), 800);
             update();
